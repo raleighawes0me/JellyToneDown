@@ -26,7 +26,7 @@ Built for **Jellyfin 12.0 and newer**.
   cannot reach; this is a plain page served by the plugin that reuses the Jellyfin session
   already in their browser.
 * Optionally, a slider inside the web client itself that appears while a theme is playing.
-  That one needs script injection, which does not work on every install — see below.
+  It needs no write access to the web client and no other plugin — see below.
 
 ## What it deliberately does not do
 
@@ -99,6 +99,12 @@ the server default.
 
 **How the web client gets quieter themes** — see below.
 
+**Add the plugin's script to the web client / How the script gets in** — the script is what
+draws the slider in the browser. It is added to the `index.html` response as it is served,
+which needs no write access; the older behaviour of editing `index.html` on disk is still
+available in the dropdown, and switching back removes anything it wrote. The status panel
+reports how many page loads the tag has actually gone into.
+
 **Leave these clients alone** — a comma-separated list matched loosely against the client name,
 for example `Kodi, Infuse`. Useful if an app already has a theme volume control you would
 rather use.
@@ -127,10 +133,15 @@ straight back to Jellyfin untouched. The theme still plays; it just plays at its
 volume.
 
 **The browser script (optional).** Jellyfin has no supported way for a plugin to add a script
-to the web client, so, like every other plugin that needs one, JellyToneDown edits
-`index.html` to add a `<script>` tag. The script is what draws the slider that appears while
-a theme is playing. Unticking the setting removes the tag cleanly, and the edit is re-applied
-at each server start because upgrading Jellyfin replaces that file.
+to the web client, so plugins that need one add a `<script>` tag to `index.html`. JellyToneDown
+does that as the page is served: the same middleware that fronts the request pipeline inserts
+the tag into the `index.html` response before it reaches the browser. The file on disk is never
+touched, so it does not matter who owns it, and a jellyfin-web upgrade cannot undo it. The
+script is what draws the slider that appears while a theme is playing.
+
+The response is only rewritten when it is a `200 text/html` for the web client's own index, the
+tag is not added twice if it is somehow already there, and any failure serves the original page
+untouched — losing a slider is a small thing, breaking the web client is not.
 
 The web client can get its reduction from either mechanism:
 
@@ -143,13 +154,13 @@ The web client can get its reduction from either mechanism:
 
 ## Known limitations
 
-**The script tag usually cannot be written, and that is fine.** On a package install the web
-client lives at `/usr/share/jellyfin-web` owned by root while Jellyfin runs as the `jellyfin`
-user, so the patch fails and the config page says so plainly. Nothing is degraded by this:
-server-side gain still covers the web client, and users still get their own level from
-`/JellyToneDown/MySettings`. The only thing lost is the slider appearing *inside* the web
-client while a theme plays. If you want that too, make `index.html` writable by the server's
-user — but note a jellyfin-web update replaces the file and you will have to do it again.
+**The in-browser slider only exists in the web client.** That is what a browser script is.
+Swiftfin, Findroid, the Android TV app, Kodi and Infuse are native apps that never load
+jellyfin-web, so nothing injected into it can reach them — which is the whole reason the gain
+is applied on the server. Those clients get their reduction that way and need nothing from the
+script. (Before 1.1.0 the script tag was written into `index.html` on disk, which failed on any
+install where the web client is owned by root; that mode is still selectable but is no longer
+the default, and nothing depends on it.)
 
 **First play of a theme has to wait for ffmpeg.** Usually a fraction of a second for a short
 mp3, and only once per theme per level. Run **Dashboard → Scheduled Tasks → Pre-render theme
