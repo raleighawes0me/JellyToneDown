@@ -21,8 +21,12 @@ Built for **Jellyfin 12.0 and newer**.
 * **Never modifies your files.** Adjusted copies are written into Jellyfin's cache directory,
   keyed by the source file and the level applied. Delete the cache at any time; your
   `theme.mp3` files are never read-write opened, let alone rewritten.
-* An optional slider in the web client that appears while a theme is playing, so users can set
-  their own level without going anywhere near the dashboard.
+* **A page your users can set their own level on**, at `/JellyToneDown/MySettings`, without
+  dashboard access. Plugin settings normally live in the admin dashboard, which ordinary users
+  cannot reach; this is a plain page served by the plugin that reuses the Jellyfin session
+  already in their browser.
+* Optionally, a slider inside the web client itself that appears while a theme is playing.
+  That one needs script injection, which does not work on every install — see below.
 
 ## What it deliberately does not do
 
@@ -89,8 +93,9 @@ number.
 **Adjust theme songs / theme videos** — either can be switched off. For theme videos only the
 audio is re-encoded; the video stream is copied through.
 
-**Let users set their own level** — adds the in-browser slider. Turn it off to hold everyone
-to the server default.
+**Let users set their own level** — enables `/JellyToneDown/MySettings` and the in-browser
+slider. The config page shows the exact address to hand out. Turn this off to hold everyone to
+the server default.
 
 **How the web client gets quieter themes** — see below.
 
@@ -138,20 +143,28 @@ The web client can get its reduction from either mechanism:
 
 ## Known limitations
 
-**The script tag may not be writable.** On a package install, the web client usually lives at
-`/usr/share/jellyfin-web` owned by root, while Jellyfin runs as the `jellyfin` user. The patch
-then fails and the config page says so. This is not fatal — server-side gain covers the web
-client too, and all you lose is the in-browser slider. If you want it, make `index.html`
-writable by the server's user, or use the default server-side mode and set levels from the
-dashboard.
+**The script tag usually cannot be written, and that is fine.** On a package install the web
+client lives at `/usr/share/jellyfin-web` owned by root while Jellyfin runs as the `jellyfin`
+user, so the patch fails and the config page says so plainly. Nothing is degraded by this:
+server-side gain still covers the web client, and users still get their own level from
+`/JellyToneDown/MySettings`. The only thing lost is the slider appearing *inside* the web
+client while a theme plays. If you want that too, make `index.html` writable by the server's
+user — but note a jellyfin-web update replaces the file and you will have to do it again.
 
 **First play of a theme has to wait for ffmpeg.** Usually a fraction of a second for a short
 mp3, and only once per theme per level. Run **Dashboard → Scheduled Tasks → Pre-render theme
 audio** after changing the volume to do the whole library up front.
 
-**The audio is re-encoded.** Applying gain means decoding and re-encoding, at a high quality
-setting in the source's own container. For background theme music this is inaudible, but it
-is not bit-identical. Use the in-browser mode for the web client if that matters to you.
+**The audio is re-encoded.** Applying gain means decoding and re-encoding, in the source's own
+container and at the lower of the source's own bitrate and a per-codec ceiling — so a 128 kbps
+theme comes back 128 kbps rather than being inflated. For background theme music this is
+inaudible, but it is not bit-identical. Use the in-browser mode for the web client if that
+matters to you.
+
+Because the encoder settings are part of the cache key, changing the volume, replacing a
+theme file, or upgrading to a version that encodes differently all produce a fresh cache entry
+by themselves. Old entries are dropped once the cache passes its size limit, or immediately
+via **Clear the adjusted-audio cache** on the config page.
 
 **HLS is not intercepted.** Theme media is never delivered as a segmented stream in practice,
 and rewriting one from middleware is not safe, so those routes are left alone.

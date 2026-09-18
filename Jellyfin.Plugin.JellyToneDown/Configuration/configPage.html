@@ -68,8 +68,9 @@
                         <span>Let users set their own level</span>
                     </label>
                     <div class="fieldDescription checkboxFieldDescription">
-                        Adds a slider in the web client that appears while a theme is playing.
-                        Turn this off to enforce the server default for everyone.
+                        Gives users their own page to set their level on, and a slider in the web
+                        client while a theme plays. The address is shown under Per-user levels
+                        below. Turn this off to enforce the server default for everyone.
                     </div>
                 </div>
 
@@ -138,6 +139,7 @@
                     Leave a user blank to have them follow the server default.
                 </div>
                 <div id="UserOverrides"></div>
+                <div class="fieldDescription" id="UserPageLink" style="margin-top:1em"></div>
 
                 <br />
                 <div>
@@ -221,27 +223,64 @@
                 });
             }
 
+            function renderUserPageLink(config) {
+                var container = q('#UserPageLink');
+                container.textContent = '';
+
+                if (!config.AllowUserOverrides) {
+                    container.textContent = 'Per-user levels are turned off, so only the levels '
+                        + 'above apply.';
+                    return;
+                }
+
+                var url = ApiClient.getUrl('JellyToneDown/MySettings');
+
+                container.appendChild(document.createTextNode(
+                    'Users can set their own level themselves at this address, without needing '
+                    + 'dashboard access: '));
+
+                var link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.textContent = url;
+                container.appendChild(link);
+            }
+
             function refreshStatus() {
                 ApiClient.ajax({
                     type: 'GET',
                     url: ApiClient.getUrl('JellyToneDown/Status'),
                     dataType: 'json'
                 }).then(function (status) {
-                    var injection = {
-                        Injected: 'Script is in place in the web client.',
-                        Disabled: 'Script injection is switched off.',
-                        WebClientNotFound: 'Could not find the web client on disk.',
-                        NotWritable: 'index.html is not writable by the Jellyfin process, so the '
-                            + 'in-browser slider is unavailable. Everything else still works.',
-                        Failed: 'Injection failed; see the server log.'
-                    }[status.InjectionStatus] || status.InjectionStatus;
+                    // Short headline only. The server already returns a full sentence in
+                    // InjectionMessage, so anything longer here just says it twice.
+                    var headline = {
+                        Injected: 'Browser slider: active',
+                        Disabled: 'Browser slider: turned off',
+                        WebClientNotFound: 'Browser slider: web client not found',
+                        NotWritable: 'Browser slider: unavailable',
+                        Failed: 'Browser slider: failed'
+                    }[status.InjectionStatus] || ('Browser slider: ' + status.InjectionStatus);
 
-                    q('#StatusPanel').innerHTML =
-                        '<div>' + injection + '</div>'
-                        + '<div style="margin-top:.4em;opacity:.8">' + status.InjectionMessage + '</div>'
-                        + '<div style="margin-top:.8em">Cache: ' + status.CachedFiles + ' file(s), '
-                        + status.CacheSizeMb + ' MB</div>'
-                        + '<div style="opacity:.7">' + status.CachePath + '</div>';
+                    var panel = q('#StatusPanel');
+                    panel.textContent = '';
+
+                    function line(text, style) {
+                        var el = document.createElement('div');
+                        if (style) {
+                            el.setAttribute('style', style);
+                        }
+                        // textContent, not innerHTML - this carries a filesystem path.
+                        el.textContent = text;
+                        panel.appendChild(el);
+                    }
+
+                    line(headline);
+                    line(status.InjectionMessage, 'margin-top:.4em;opacity:.8');
+                    line('Cache: ' + status.CachedFiles + ' file(s), ' + status.CacheSizeMb + ' MB',
+                        'margin-top:.8em');
+                    line(status.CachePath, 'opacity:.7');
                 }).catch(function () {
                     q('#StatusPanel').textContent = 'Could not load status.';
                 });
@@ -272,6 +311,7 @@
                     q('#ExcludedClients').value = (config.ExcludedClients || []).join(', ');
 
                     renderUsers(config);
+                    renderUserPageLink(config);
                     Dashboard.hideLoadingMsg();
                     refreshStatus();
                 }).catch(function () {
