@@ -194,7 +194,12 @@
         var options = {
             method: method,
             headers: {
-                'X-Emby-Token': token,
+                // Jellyfin 12 ships a migration that turns EnableLegacyAuthorization off,
+                // and the X-Emby-Token header is only read when that is on - so this has
+                // to be the standard scheme. Only Token is sent on purpose: supplying
+                // Client, Device or Version here would overwrite those fields on the
+                // user's real device record, renaming their session in the dashboard.
+                'Authorization': 'MediaBrowser Token="' + token + '"',
                 'Accept': 'application/json'
             }
         };
@@ -305,7 +310,8 @@
         })
         .catch(function (err) {
             if (err && (err.status === 401 || err.status === 403)) {
-                notice('Your Jellyfin session has expired. Sign in again, then reload this page.');
+                notice('The server would not accept this browser’s Jellyfin session. '
+                    + 'Try signing out and back in, then reload this page.');
             } else {
                 notice('Could not reach the server. Is the JellyToneDown plugin still installed?');
             }

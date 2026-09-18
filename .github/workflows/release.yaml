@@ -106,11 +106,15 @@ jobs:
       - name: Update manifest.json
         run: |
           ZIP="${{ steps.jprm.outputs.artifact }}"
+          # Fails the release if CHANGELOG.md has no section for this version, rather than
+          # captioning it with whatever the previous release said.
           python tools/update_manifest.py \
             --manifest manifest.json \
             --build-yaml build.yaml \
+            --changelog-file CHANGELOG.md \
             --zip "$ZIP" \
             --version "${{ steps.version.outputs.four }}" \
+            --image-url "https://raw.githubusercontent.com/${{ github.repository }}/main/image.png" \
             --source-url "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/$(basename "$ZIP")"
 
       - name: Commit the manifest
