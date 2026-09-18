@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Theme music volume</title>
+<style>
+    :root {
+        color-scheme: dark;
+        --bg: #101010;
+        --card: #1c1c1c;
+        --fg: #f2f2f2;
+        --muted: #9a9a9a;
+        --accent: #00a4dc;
+        --line: #2e2e2e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: var(--bg);
+        color: var(--fg);
+        font: 400 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    main {
+        width: 100%;
+        max-width: 30rem;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: .9rem;
+        padding: 1.75rem;
+    }
+
+    h1 { margin: 0 0 .35rem; font-size: 1.3rem; font-weight: 600; }
+    .sub { margin: 0 0 1.75rem; color: var(--muted); font-size: .9rem; }
+
+    .row { display: flex; align-items: center; gap: .9rem; }
+
+    input[type=range] {
+        flex: 1;
+        accent-color: var(--accent);
+        cursor: pointer;
+        min-width: 0;
+    }
+
+    .readout {
+        min-width: 3.4rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-size: 1.35rem;
+        font-weight: 600;
+    }
+
+    button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: .5rem;
+        padding: .5rem .9rem;
+        cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { border-color: var(--accent); }
+    button:disabled { opacity: .45; cursor: default; }
+
+    .icon-button { border: 0; padding: .25rem; line-height: 0; }
+
+    footer {
+        margin-top: 1.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .state { color: var(--muted); font-size: .85rem; }
+    .state.saved { color: var(--accent); }
+    .hidden { display: none !important; }
+
+    .notice {
+        margin: 0;
+        padding: 1rem;
+        border-radius: .6rem;
+        background: #241f14;
+        border: 1px solid #4a3d1e;
+        color: #f0dfae;
+        font-size: .92rem;
+    }
+</style>
+</head>
+<body>
+<main>
+    <h1>Theme music volume</h1>
+    <p class="sub">How loud the theme plays when you open a show or a film. Only yours &mdash; it
+        does not affect anyone else, or any other audio.</p>
+
+    <p id="notice" class="notice hidden"></p>
+
+    <div id="controls" class="hidden">
+        <div class="row">
+            <button id="mute" class="icon-button" type="button" title="Mute" aria-label="Mute theme music"></button>
+            <input id="slider" type="range" min="0" max="100" step="1" aria-label="Theme music volume">
+            <span id="readout" class="readout">&mdash;</span>
+        </div>
+        <footer>
+            <span id="state" class="state"></span>
+            <button id="reset" type="button">Use the server default</button>
+        </footer>
+    </div>
+</main>
+
+<script>
+(function () {
+    'use strict';
+
+    var SPEAKER_ON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        + '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>';
+    var SPEAKER_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        + '<path d="M3 9v6h4l5 5V4L7 9H3zm18.3-1.3-1.4-1.4L17 9.2l-2.9-2.9-1.4 1.4L15.6 10.6l-2.9 2.9 1.4 1.4'
+        + ' 2.9-2.9 2.9 2.9 1.4-1.4-2.9-2.9 2.9-2.9z"/></svg>';
+
+    var el = {
+        notice: document.getElementById('notice'),
+        controls: document.getElementById('controls'),
+        slider: document.getElementById('slider'),
+        readout: document.getElementById('readout'),
+        mute: document.getElementById('mute'),
+        reset: document.getElementById('reset'),
+        state: document.getElementById('state')
+    };
+
+    var settings = null;
+    var lastNonZero = 40;
+    var saveTimer = null;
+
+    function notice(text) {
+        el.notice.textContent = text;
+        el.notice.classList.remove('hidden');
+        el.controls.classList.add('hidden');
+    }
+
+    // This page is served at <base>/JellyToneDown/MySettings, so a relative URL lands on
+    // <base>/JellyToneDown/Volume without the page needing to know the base URL.
+    function apiUrl() {
+        return location.pathname.replace(/\/[^/]*$/, '/Volume');
+    }
+
+    // The page shares an origin with the web client, so it can read the session the user
+    // already has rather than asking them to sign in again.
+    function readToken() {
+        var raw;
+        try {
+            raw = localStorage.getItem('jellyfin_credentials');
+        } catch (err) {
+            return null;
+        }
+        if (!raw) {
+            return null;
+        }
+
+        var servers;
+        try {
+            servers = (JSON.parse(raw) || {}).Servers || [];
+        } catch (err) {
+            return null;
+        }
+
+        var best = null;
+        servers.forEach(function (server) {
+            if (!server || !server.AccessToken) {
+                return;
+            }
+            if (!best || (server.DateLastAccessed || 0) > (best.DateLastAccessed || 0)) {
+                best = server;
+            }
+        });
+
+        return best ? best.AccessToken : null;
+    }
+
+    function request(method, token, body) {
+        var options = {
+            method: method,
+            headers: {
+                'X-Emby-Token': token,
+                'Accept': 'application/json'
+            }
+        };
+        if (body !== undefined) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
+        return fetch(apiUrl(), options).then(function (response) {
+            if (response.status === 401 || response.status === 403) {
+                var err = new Error('forbidden');
+                err.status = response.status;
+                throw err;
+            }
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        });
+    }
+
+    function render(percent, isOverride) {
+        el.slider.value = String(percent);
+        el.readout.textContent = percent + '%';
+        el.mute.innerHTML = percent === 0 ? SPEAKER_OFF : SPEAKER_ON;
+        el.mute.title = percent === 0 ? 'Restore' : 'Mute';
+        el.reset.disabled = !isOverride;
+        if (percent > 0) {
+            lastNonZero = percent;
+        }
+    }
+
+    function setState(text, saved) {
+        el.state.textContent = text;
+        el.state.classList.toggle('saved', !!saved);
+    }
+
+    function apply(dto) {
+        settings = dto;
+        render(dto.VolumePercent, dto.IsUserOverride);
+        setState(dto.IsUserOverride
+            ? 'Your own setting.'
+            : 'Following the server default of ' + dto.ServerDefaultPercent + '%.');
+    }
+
+    function queueSave(percent) {
+        setState('Saving…');
+        if (saveTimer) {
+            clearTimeout(saveTimer);
+        }
+        saveTimer = setTimeout(function () {
+            saveTimer = null;
+            var token = readToken();
+            request('POST', token, { VolumePercent: percent })
+                .then(function (dto) {
+                    settings = dto;
+                    el.reset.disabled = !dto.IsUserOverride;
+                    setState('Saved. It applies the next time a theme starts.', true);
+                })
+                .catch(function () {
+                    setState('Could not save. Try reloading the page.');
+                });
+        }, 400);
+    }
+
+    function change(percent) {
+        percent = Math.min(100, Math.max(0, Math.round(percent)));
+        render(percent, true);
+        queueSave(percent);
+    }
+
+    el.slider.addEventListener('input', function () {
+        change(Number(el.slider.value));
+    });
+
+    el.mute.addEventListener('click', function () {
+        change(Number(el.slider.value) === 0 ? lastNonZero : 0);
+    });
+
+    el.reset.addEventListener('click', function () {
+        var token = readToken();
+        setState('Resetting…');
+        request('DELETE', token)
+            .then(function (dto) {
+                apply(dto);
+                setState('Back to the server default of ' + dto.ServerDefaultPercent + '%.', true);
+            })
+            .catch(function () {
+                setState('Could not reset. Try reloading the page.');
+            });
+    });
+
+    var token = readToken();
+    if (!token) {
+        notice('Sign in to Jellyfin in this browser first, then reload this page.');
+        return;
+    }
+
+    request('GET', token)
+        .then(function (dto) {
+            if (!dto.UserOverridesAllowed) {
+                notice('Your server administrator has turned off per-user theme volume. '
+                    + 'The server default of ' + dto.ServerDefaultPercent + '% applies.');
+                return;
+            }
+            el.notice.classList.add('hidden');
+            el.controls.classList.remove('hidden');
+            apply(dto);
+        })
+        .catch(function (err) {
+            if (err && (err.status === 401 || err.status === 403)) {
+                notice('Your Jellyfin session has expired. Sign in again, then reload this page.');
+            } else {
+                notice('Could not reach the server. Is the JellyToneDown plugin still installed?');
+            }
+        });
+})();
+</script>
+</body>
+</html>

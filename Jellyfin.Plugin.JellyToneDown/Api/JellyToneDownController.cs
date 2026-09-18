@@ -123,8 +123,34 @@ public class JellyToneDownController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult GetClientScript()
     {
+        return EmbeddedFile("jellytonedown.js", "application/javascript; charset=utf-8");
+    }
+
+    /// <summary>
+    /// A standalone page where any signed-in user can set their own theme volume.
+    /// </summary>
+    /// <remarks>
+    /// Plugin configuration pages live in the admin dashboard, so ordinary users cannot
+    /// reach them, and the in-web-client slider needs script injection, which does not
+    /// work on installs where the web client is not writable by the server. This page
+    /// needs neither: it is served by the plugin, shares an origin with the web client so
+    /// it can reuse the session already in the browser, and talks to the same per-user
+    /// endpoints. Served anonymously because the page itself carries nothing sensitive -
+    /// the API calls it makes are still authorised.
+    /// </remarks>
+    /// <returns>The page.</returns>
+    [HttpGet("MySettings")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult GetUserSettingsPage()
+    {
+        return EmbeddedFile("userSettings.html", "text/html; charset=utf-8");
+    }
+
+    private ActionResult EmbeddedFile(string fileName, string contentType)
+    {
         var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = typeof(Plugin).Namespace + ".Web.jellytonedown.js";
+        var resourceName = typeof(Plugin).Namespace + ".Web." + fileName;
 
         var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
@@ -133,7 +159,7 @@ public class JellyToneDownController : ControllerBase
         }
 
         Response.Headers.CacheControl = "public, max-age=3600";
-        return File(stream, "application/javascript; charset=utf-8");
+        return File(stream, contentType);
     }
 
     /// <summary>
