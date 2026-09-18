@@ -1,0 +1,115 @@
+name: Release
+
+# Tag a commit to cut a release:
+#     git tag v1.0.0 && git push origin v1.0.0
+#
+# This builds the plugin, attaches the zip to a GitHub release, and updates manifest.json
+# on main so anyone who has added this repository as a Jellyfin plugin repository gets the
+# new version offered to them in the dashboard.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the leading v (e.g. 1.0.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            RAW="${{ github.event.inputs.version }}"
+          else
+            RAW="${GITHUB_REF_NAME#v}"
+          fi
+          # Jellyfin wants a four-part version string.
+          FOUR="$RAW"
+          while [ "$(echo "$FOUR" | tr -cd '.' | wc -c)" -lt 3 ]; do FOUR="$FOUR.0"; done
+          echo "raw=$RAW" >> "$GITHUB_OUTPUT"
+          echo "four=$FOUR" >> "$GITHUB_OUTPUT"
+          echo "tag=v$RAW" >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install JPRM
+        run: python -m pip install --upgrade jprm
+
+      - name: Stamp the version
+        run: |
+          python - <<'PY'
+          import os, re, pathlib
+          four = os.environ['FOUR']
+          p = pathlib.Path('build.yaml')
+          p.write_text(re.sub(r'^version:.*$', f'version: "{four}"', p.read_text(), flags=re.M))
+          d = pathlib.Path('Directory.Build.props')
+          t = d.read_text()
+          for tag in ('Version', 'AssemblyVersion', 'FileVersion'):
+              t = re.sub(rf'<{tag}>[^<]*</{tag}>', f'<{tag}>{four}</{tag}>', t)
+          d.write_text(t)
+          PY
+        env:
+          FOUR: ${{ steps.version.outputs.four }}
+
+      - name: Build and package
+        id: build
+        run: |
+          jprm --verbosity=debug plugin build . \
+            --output ./artifacts \
+            --version "${{ steps.version.outputs.four }}" \
+            --dotnet-framework net10.0
+          ZIP=$(ls ./artifacts/*.zip | head -n1)
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: ${{ steps.build.outputs.zip }}
+
+      - name: Update manifest.json
+        run: |
+          python tools/update_manifest.py \
+            --manifest manifest.json \
+            --build-yaml build.yaml \
+            --zip "${{ steps.build.outputs.zip }}" \
+            --version "${{ steps.version.outputs.four }}" \
+            --source-url "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/${{ steps.build.outputs.name }}"
+
+      - name: Commit the manifest
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add manifest.json
+          if git diff --cached --quiet; then
+            echo "manifest.json unchanged"
+          else
+            git commit -m "Add ${{ steps.version.outputs.four }} to the plugin manifest"
+            git push origin HEAD:main
+          fi
