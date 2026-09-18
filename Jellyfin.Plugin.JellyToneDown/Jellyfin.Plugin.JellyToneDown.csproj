@@ -40,6 +40,8 @@
     <EmbeddedResource Include="Configuration\configPage.html" />
     <None Remove="Web\jellytonedown.js" />
     <EmbeddedResource Include="Web\jellytonedown.js" />
+    <None Remove="Web\userSettings.html" />
+    <EmbeddedResource Include="Web\userSettings.html" />
   </ItemGroup>
 
 </Project>

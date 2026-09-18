@@ -65,6 +65,8 @@ public sealed class GainCacheService
     /// <param name="profile">The container to produce.</param>
     /// <param name="amplitude">The amplitude multiplier, 0-1.</param>
     /// <param name="isVideo">Whether this is a theme video.</param>
+    /// <param name="sourceBitrateBps">The source audio bitrate, if known, so the adjusted
+    /// copy is not encoded larger than the original.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The path to the adjusted file, or null if it could not be produced.</returns>
     public async Task<string?> GetOrCreateAsync(
@@ -72,6 +74,7 @@ public sealed class GainCacheService
         ContainerProfile profile,
         double amplitude,
         bool isVideo,
+        int? sourceBitrateBps,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -83,7 +86,8 @@ public sealed class GainCacheService
             return null;
         }
 
-        var key = BuildKey(item.Id, sourcePath, profile, amplitude);
+        var encoderArgs = profile.BuildEncoderArgs(sourceBitrateBps).ToArray();
+        var key = BuildKey(item.Id, sourcePath, profile, amplitude, encoderArgs);
         if (_unprocessable.ContainsKey(key))
         {
             return null;
@@ -114,7 +118,7 @@ public sealed class GainCacheService
             Directory.CreateDirectory(CacheRoot);
 
             var tempPath = targetPath + ".partial";
-            var produced = await RunFfmpegAsync(sourcePath, tempPath, profile, amplitude, isVideo, cancellationToken)
+            var produced = await RunFfmpegAsync(sourcePath, tempPath, profile, encoderArgs, amplitude, isVideo, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!produced)
@@ -259,7 +263,12 @@ public sealed class GainCacheService
         return removed;
     }
 
-    private static string BuildKey(Guid itemId, string sourcePath, ContainerProfile profile, double amplitude)
+    private static string BuildKey(
+        Guid itemId,
+        string sourcePath,
+        ContainerProfile profile,
+        double amplitude,
+        IReadOnlyList<string> encoderArgs)
     {
         long length = 0;
         long stamp = 0;
@@ -274,9 +283,12 @@ public sealed class GainCacheService
             // Fall through with zeroes; the key is still stable for the session.
         }
 
+        // The encoder arguments are part of the key, so changing the encoding policy (or
+        // the source's bitrate) produces a new cache entry on its own. Nothing has to
+        // remember to invalidate anything.
         var material = string.Create(
             CultureInfo.InvariantCulture,
-            $"{sourcePath}|{length}|{stamp}|{profile.Extension}");
+            $"{sourcePath}|{length}|{stamp}|{profile.Extension}|{string.Join(' ', encoderArgs)}");
 
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToUpperInvariant();
         var ampUnits = (int)Math.Round(Math.Clamp(amplitude, 0d, 1d) * 100000d, MidpointRounding.AwayFromZero);
@@ -325,6 +337,7 @@ public sealed class GainCacheService
         string sourcePath,
         string targetPath,
         ContainerProfile profile,
+        IReadOnlyList<string> encoderArgs,
         double amplitude,
         bool isVideo,
         CancellationToken cancellationToken)
@@ -346,7 +359,7 @@ public sealed class GainCacheService
             RedirectStandardInput = false,
         };
 
-        foreach (var arg in BuildArguments(sourcePath, targetPath, profile, amplitude, isVideo))
+        foreach (var arg in BuildArguments(sourcePath, targetPath, profile, encoderArgs, amplitude, isVideo))
         {
             startInfo.ArgumentList.Add(arg);
         }
@@ -397,6 +410,7 @@ public sealed class GainCacheService
         string sourcePath,
         string targetPath,
         ContainerProfile profile,
+        IReadOnlyList<string> encoderArgs,
         double amplitude,
         bool isVideo)
     {
@@ -425,7 +439,7 @@ public sealed class GainCacheService
         yield return "-filter:a";
         yield return string.Create(CultureInfo.InvariantCulture, $"volume={amplitude:0.######}");
 
-        foreach (var arg in profile.EncoderArgs)
+        foreach (var arg in encoderArgs)
         {
             yield return arg;
         }

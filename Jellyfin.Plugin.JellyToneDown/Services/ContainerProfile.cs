@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Jellyfin.Plugin.JellyToneDown.Services;
 
@@ -8,35 +9,58 @@ namespace Jellyfin.Plugin.JellyToneDown.Services;
 /// </summary>
 public sealed class ContainerProfile
 {
+    /// <summary>
+    /// Never encode below this, however low the source claims to be. Guards against
+    /// nonsense bitrate metadata.
+    /// </summary>
+    private const int MinBitrateKbps = 32;
+
+    private static readonly string[] _noArgs = [];
+
     private static readonly Dictionary<string, ContainerProfile> _audio =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["mp3"] = new ContainerProfile("mp3", "mp3", "audio/mpeg", ["-c:a", "libmp3lame", "-q:a", "2"]),
-            ["m4a"] = new ContainerProfile("m4a", "m4a", "audio/mp4", ["-c:a", "aac", "-b:a", "256k"]),
-            ["m4b"] = new ContainerProfile("m4b", "m4b", "audio/mp4", ["-c:a", "aac", "-b:a", "256k"]),
-            ["aac"] = new ContainerProfile("aac", "aac", "audio/aac", ["-c:a", "aac", "-b:a", "256k"]),
-            ["ogg"] = new ContainerProfile("ogg", "ogg", "audio/ogg", ["-c:a", "libvorbis", "-q:a", "6"]),
-            ["oga"] = new ContainerProfile("oga", "oga", "audio/ogg", ["-c:a", "libvorbis", "-q:a", "6"]),
-            ["opus"] = new ContainerProfile("opus", "opus", "audio/ogg", ["-c:a", "libopus", "-b:a", "192k"]),
-            ["flac"] = new ContainerProfile("flac", "flac", "audio/flac", ["-c:a", "flac"]),
-            ["wav"] = new ContainerProfile("wav", "wav", "audio/wav", ["-c:a", "pcm_s16le"]),
+            ["mp3"] = new ContainerProfile("mp3", "mp3", "audio/mpeg", ["-c:a", "libmp3lame"], ["-q:a", "2"], 192),
+            ["m4a"] = new ContainerProfile("m4a", "m4a", "audio/mp4", ["-c:a", "aac"], ["-b:a", "192k"], 192),
+            ["m4b"] = new ContainerProfile("m4b", "m4b", "audio/mp4", ["-c:a", "aac"], ["-b:a", "192k"], 192),
+            ["aac"] = new ContainerProfile("adts", "aac", "audio/aac", ["-c:a", "aac"], ["-b:a", "192k"], 192),
+            ["ogg"] = new ContainerProfile("ogg", "ogg", "audio/ogg", ["-c:a", "libvorbis"], ["-q:a", "6"], 192),
+            ["oga"] = new ContainerProfile("ogg", "oga", "audio/ogg", ["-c:a", "libvorbis"], ["-q:a", "6"], 192),
+            ["opus"] = new ContainerProfile("opus", "opus", "audio/ogg", ["-c:a", "libopus"], ["-b:a", "128k"], 128),
+            ["flac"] = new ContainerProfile("flac", "flac", "audio/flac", ["-c:a", "flac"], _noArgs, null),
+            ["wav"] = new ContainerProfile("wav", "wav", "audio/wav", ["-c:a", "pcm_s16le"], _noArgs, null),
         };
 
     private static readonly Dictionary<string, ContainerProfile> _video =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["mp4"] = new ContainerProfile("mp4", "mp4", "video/mp4", ["-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart"]),
-            ["m4v"] = new ContainerProfile("m4v", "m4v", "video/mp4", ["-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart"]),
-            ["mkv"] = new ContainerProfile("matroska", "mkv", "video/x-matroska", ["-c:v", "copy", "-c:a", "aac", "-b:a", "256k"]),
-            ["webm"] = new ContainerProfile("webm", "webm", "video/webm", ["-c:v", "copy", "-c:a", "libopus", "-b:a", "192k"]),
+            ["mp4"] = new ContainerProfile("mp4", "mp4", "video/mp4", ["-c:a", "aac"], ["-b:a", "192k"], 192, ["-c:v", "copy", "-movflags", "+faststart"]),
+            ["m4v"] = new ContainerProfile("mp4", "m4v", "video/mp4", ["-c:a", "aac"], ["-b:a", "192k"], 192, ["-c:v", "copy", "-movflags", "+faststart"]),
+            ["mkv"] = new ContainerProfile("matroska", "mkv", "video/x-matroska", ["-c:a", "aac"], ["-b:a", "192k"], 192, ["-c:v", "copy"]),
+            ["webm"] = new ContainerProfile("webm", "webm", "video/webm", ["-c:a", "libopus"], ["-b:a", "128k"], 128, ["-c:v", "copy"]),
         };
 
-    private ContainerProfile(string ffmpegFormat, string extension, string mimeType, string[] encoderArgs)
+    private readonly string[] _codecArgs;
+    private readonly string[] _unknownBitrateArgs;
+    private readonly int? _ceilingKbps;
+    private readonly string[] _extraArgs;
+
+    private ContainerProfile(
+        string ffmpegFormat,
+        string extension,
+        string mimeType,
+        string[] codecArgs,
+        string[] unknownBitrateArgs,
+        int? ceilingKbps,
+        string[]? extraArgs = null)
     {
         FfmpegFormat = ffmpegFormat;
         Extension = extension;
         MimeType = mimeType;
-        EncoderArgs = encoderArgs;
+        _codecArgs = codecArgs;
+        _unknownBitrateArgs = unknownBitrateArgs;
+        _ceilingKbps = ceilingKbps;
+        _extraArgs = extraArgs ?? _noArgs;
     }
 
     /// <summary>
@@ -55,9 +79,44 @@ public sealed class ContainerProfile
     public string MimeType { get; }
 
     /// <summary>
-    /// Gets the codec arguments.
+    /// Builds the codec arguments for this container.
     /// </summary>
-    public IReadOnlyList<string> EncoderArgs { get; }
+    /// <remarks>
+    /// The output bitrate is the lower of the source's own bitrate and a per-codec
+    /// ceiling, so a 128 kbps theme stays 128 kbps instead of being re-encoded larger
+    /// than it started. Lossless containers ignore the bitrate entirely, and when the
+    /// source bitrate is unknown we fall back to a fixed quality setting.
+    /// </remarks>
+    /// <param name="sourceBitrateBps">The source audio bitrate in bits per second, if known.</param>
+    /// <returns>The ffmpeg arguments.</returns>
+    public IEnumerable<string> BuildEncoderArgs(int? sourceBitrateBps)
+    {
+        foreach (var arg in _codecArgs)
+        {
+            yield return arg;
+        }
+
+        if (_ceilingKbps is not null)
+        {
+            if (TryPickBitrate(sourceBitrateBps, _ceilingKbps.Value, out var kbps))
+            {
+                yield return "-b:a";
+                yield return string.Create(CultureInfo.InvariantCulture, $"{kbps}k");
+            }
+            else
+            {
+                foreach (var arg in _unknownBitrateArgs)
+                {
+                    yield return arg;
+                }
+            }
+        }
+
+        foreach (var arg in _extraArgs)
+        {
+            yield return arg;
+        }
+    }
 
     /// <summary>
     /// Looks up a container by name.
@@ -122,5 +181,24 @@ public sealed class ContainerProfile
         }
 
         return null;
+    }
+
+    private static bool TryPickBitrate(int? sourceBitrateBps, int ceilingKbps, out int kbps)
+    {
+        kbps = 0;
+
+        if (sourceBitrateBps is not > 0)
+        {
+            return false;
+        }
+
+        var sourceKbps = sourceBitrateBps.Value / 1000;
+        if (sourceKbps <= 0)
+        {
+            return false;
+        }
+
+        kbps = Math.Clamp(sourceKbps, MinBitrateKbps, ceilingKbps);
+        return true;
     }
 }
