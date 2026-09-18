@@ -7,11 +7,11 @@ and updatable from the dashboard.
 
 Run by the release workflow; also usable by hand:
 
-    python tools/update_manifest.py \\
-        --manifest manifest.json \\
-        --build-yaml build.yaml \\
-        --zip artifacts/jellytonedown_1.0.0.0.zip \\
-        --version 1.0.0.0 \\
+    python tools/update_manifest.py \
+        --manifest manifest.json \
+        --build-yaml build.yaml \
+        --zip artifacts/jellytonedown_1.0.0.0.zip \
+        --version 1.0.0.0 \
         --source-url https://github.com/owner/repo/releases/download/v1.0.0/jellytonedown_1.0.0.0.zip
 """
 
