@@ -1,11 +1,13 @@
 name: Release
 
-# Tag a commit to cut a release:
-#     git tag v1.0.0 && git push origin v1.0.0
+# Cut a release by tagging a commit on main:
+#     git tag v1.0.1 && git push origin v1.0.1
 #
-# This builds the plugin, attaches the zip to a GitHub release, and updates manifest.json
-# on main so anyone who has added this repository as a Jellyfin plugin repository gets the
-# new version offered to them in the dashboard.
+# Or run this workflow by hand from the Actions tab and type the version.
+#
+# It builds the plugin, attaches the zip to a GitHub release, and adds the version to
+# manifest.json on main, so servers that have added this repository as a Jellyfin plugin
+# repository are offered the update.
 
 on:
   push:
@@ -27,6 +29,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Builds from main rather than the tag, because the last step pushes the
+          # manifest commit back to main. Tag main's HEAD when you release.
           ref: main
           fetch-depth: 0
 
@@ -55,9 +59,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install JPRM
-        run: python -m pip install --upgrade jprm
-
       - name: Stamp the version
         run: |
           python - <<'PY'
@@ -74,16 +75,25 @@ jobs:
         env:
           FOUR: ${{ steps.version.outputs.four }}
 
-      - name: Build and package
-        id: build
-        run: |
-          jprm --verbosity=debug plugin build . \
-            --output ./artifacts \
-            --version "${{ steps.version.outputs.four }}" \
-            --dotnet-framework net10.0
-          ZIP=$(ls ./artifacts/*.zip | head -n1)
-          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+      # Do not remove these two steps. JPRM's first action is `dotnet clean`, which needs
+      # the project to have been restored already, so running it against a fresh checkout
+      # fails before it builds anything. Restoring here is exactly what the Build workflow
+      # does, and is the reason that one is green.
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      # Uses the same action as the Build workflow rather than calling the JPRM CLI by
+      # hand; among other things it creates the output directory, which JPRM itself does
+      # not do.
+      - name: Package with JPRM
+        uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
+        id: jprm
+        with:
+          dotnet-target: net10.0
+          version: ${{ steps.version.outputs.four }}
 
       - name: Create the release
         uses: softprops/action-gh-release@v2
@@ -91,21 +101,24 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
-          files: ${{ steps.build.outputs.zip }}
+          files: ${{ steps.jprm.outputs.artifact }}
 
       - name: Update manifest.json
         run: |
+          ZIP="${{ steps.jprm.outputs.artifact }}"
           python tools/update_manifest.py \
             --manifest manifest.json \
             --build-yaml build.yaml \
-            --zip "${{ steps.build.outputs.zip }}" \
+            --zip "$ZIP" \
             --version "${{ steps.version.outputs.four }}" \
-            --source-url "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/${{ steps.build.outputs.name }}"
+            --source-url "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/$(basename "$ZIP")"
 
       - name: Commit the manifest
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # Only manifest.json is committed. The version stamping above, and JPRM's own
+          # edits to Directory.Build.props, are build-time only and deliberately discarded.
           git add manifest.json
           if git diff --cached --quiet; then
             echo "manifest.json unchanged"
