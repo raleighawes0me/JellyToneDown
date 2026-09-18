@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.JellyToneDown.Configuration;
+using Jellyfin.Plugin.JellyToneDown.Middleware;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Plugins;
 using Microsoft.Extensions.Hosting;
@@ -12,14 +14,14 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.JellyToneDown.Services;
 
 /// <summary>
-/// The outcome of the last attempt to patch the web client.
+/// How the browser script is currently reaching the web client, if at all.
 /// </summary>
 public enum InjectionStatus
 {
-    /// <summary>Injection is switched off in the plugin configuration.</summary>
+    /// <summary>The browser slider is switched off in the plugin configuration.</summary>
     Disabled = 0,
 
-    /// <summary>The script tag is present in index.html.</summary>
+    /// <summary>The script tag has been written into index.html on disk.</summary>
     Injected = 1,
 
     /// <summary>index.html could not be found.</summary>
@@ -29,29 +31,30 @@ public enum InjectionStatus
     NotWritable = 3,
 
     /// <summary>Something else went wrong; see the server log.</summary>
-    Failed = 4
+    Failed = 4,
+
+    /// <summary>The script tag is being added to index.html as it is served.</summary>
+    ServedInResponse = 5,
+
+    /// <summary>
+    /// Response rewriting is on, but nobody has loaded the web client since the server
+    /// started, so it has had nothing to act on yet.
+    /// </summary>
+    ResponseNotSeenYet = 6
 }
 
 /// <summary>
-/// Adds the plugin's browser script to the Jellyfin web client by patching index.html,
-/// and takes it back out again when the feature is switched off.
+/// Keeps the on-disk copy of index.html in the state the configuration asks for, and reports
+/// how the browser script is reaching the web client.
 /// </summary>
 /// <remarks>
-/// Jellyfin has no supported hook for adding a script to the web client, so like every
-/// other plugin that needs one, this edits index.html in place. The edit is re-applied on
-/// every server start because upgrading Jellyfin or the web client replaces that file.
-/// <para>
-/// On a package install the web client is usually owned by root while the server runs as
-/// the jellyfin user, in which case the patch cannot be written. That is not fatal:
-/// the plugin's server-side gain covers the web client too, and only the in-browser
-/// slider is lost.
-/// </para>
+/// Since 1.1.0 the script normally goes in via <see cref="IndexHtmlInjectionMiddleware"/>,
+/// which rewrites the response and never touches the file. This service then has only one job
+/// in that mode: making sure no block written by an older version is left behind on disk.
+/// Patching the file is still available as an explicit choice.
 /// </remarks>
 public sealed class ScriptInjectionService : IHostedService
 {
-    private const string MarkerStart = "<!-- JellyToneDown:start -->";
-    private const string MarkerEnd = "<!-- JellyToneDown:end -->";
-
     private readonly IApplicationPaths _applicationPaths;
     private readonly ILogger<ScriptInjectionService> _logger;
 
@@ -67,14 +70,55 @@ public sealed class ScriptInjectionService : IHostedService
     }
 
     /// <summary>
-    /// Gets the result of the most recent patch attempt, for display on the config page.
+    /// Gets the result of the most recent attempt to patch index.html on disk.
     /// </summary>
     public static InjectionStatus LastStatus { get; private set; } = InjectionStatus.Disabled;
 
     /// <summary>
-    /// Gets a human-readable note about the most recent patch attempt.
+    /// Gets a human-readable note about the most recent attempt to patch index.html on disk.
     /// </summary>
     public static string LastMessage { get; private set; } = "Not run yet.";
+
+    /// <summary>
+    /// Describes how the browser script is reaching the web client right now, for the config
+    /// page. In response mode this reflects what has actually happened to real page loads
+    /// rather than merely what is configured.
+    /// </summary>
+    /// <returns>A status and a sentence explaining it.</returns>
+    public static (InjectionStatus Status, string Message) Describe()
+    {
+        var config = Plugin.Config;
+
+        if (!config.InjectClientScript)
+        {
+            return (
+                InjectionStatus.Disabled,
+                "The in-browser slider is switched off. Everyone still gets their level from "
+                + "the server, in the web client as well as everywhere else.");
+        }
+
+        if (config.ScriptInjectionMethod == ScriptInjectionMethod.Disk)
+        {
+            return (LastStatus, LastMessage);
+        }
+
+        var count = IndexHtmlInjectionMiddleware.InjectedResponses;
+        if (count == 0)
+        {
+            return (
+                InjectionStatus.ResponseNotSeenYet,
+                "Ready, but nobody has loaded the web client since the server started, so there "
+                + "has been nothing to add the script to yet. Open the web client in another tab "
+                + "and come back.");
+        }
+
+        return (
+            InjectionStatus.ServedInResponse,
+            "Added to "
+            + count.ToString(CultureInfo.InvariantCulture)
+            + " web client page load(s) since the server started. Nothing was written to the "
+            + "web client directory, so a Jellyfin upgrade cannot undo it.");
+    }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -103,10 +147,15 @@ public sealed class ScriptInjectionService : IHostedService
     }
 
     /// <summary>
-    /// Applies or removes the patch according to the current configuration.
+    /// Brings index.html on disk into line with the configuration: patched when the on-disk
+    /// method is selected, clean otherwise.
     /// </summary>
     public void Apply()
     {
+        var config = Plugin.Config;
+        var wantsDiskPatch = config.InjectClientScript
+            && config.ScriptInjectionMethod == ScriptInjectionMethod.Disk;
+
         try
         {
             var indexPath = Path.Combine(_applicationPaths.WebPath, "index.html");
@@ -121,17 +170,10 @@ public sealed class ScriptInjectionService : IHostedService
 
             var original = File.ReadAllText(indexPath);
             var stripped = RemoveExistingBlock(original);
-
-            var wanted = Plugin.Config.InjectClientScript;
             string updated;
 
-            if (wanted)
+            if (wantsDiskPatch)
             {
-                var version = Plugin.Instance?.Version?.ToString() ?? "0";
-                var block = string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{MarkerStart}<script src=\"../JellyToneDown/ClientScript?v={version}\" defer></script>{MarkerEnd}");
-
                 var closingBody = stripped.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
                 if (closingBody < 0)
                 {
@@ -141,7 +183,7 @@ public sealed class ScriptInjectionService : IHostedService
                     return;
                 }
 
-                updated = stripped[..closingBody] + block + stripped[closingBody..];
+                updated = stripped[..closingBody] + ClientScriptTag.Build() + stripped[closingBody..];
             }
             else
             {
@@ -150,34 +192,32 @@ public sealed class ScriptInjectionService : IHostedService
 
             if (string.Equals(updated, original, StringComparison.Ordinal))
             {
-                LastStatus = wanted ? InjectionStatus.Injected : InjectionStatus.Disabled;
-                LastMessage = wanted
-                    ? "The script tag is already in place."
-                    : "Script injection is switched off.";
+                SetIdleStatus(wantsDiskPatch, alreadyInPlace: true);
                 return;
             }
 
             File.WriteAllText(indexPath, updated);
-
-            LastStatus = wanted ? InjectionStatus.Injected : InjectionStatus.Disabled;
-            LastMessage = wanted
-                ? "Added the script tag to index.html. Reload the web client once to pick it up."
-                : "Removed the script tag from index.html.";
-
+            SetIdleStatus(wantsDiskPatch, alreadyInPlace: false);
             _logger.LogInformation("JellyToneDown: {Message}", LastMessage);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
+            if (!wantsDiskPatch)
+            {
+                // We were only tidying up after an older version. Being unable to write is
+                // the normal case on a package install, and it does not matter: the middleware
+                // recognises a block that is already in the page and will not add a second.
+                LastStatus = InjectionStatus.Disabled;
+                LastMessage = "index.html is not writable, which is fine - nothing needs to be "
+                    + "written to it.";
+                _logger.LogDebug(ex, "JellyToneDown: index.html is not writable during cleanup.");
+                return;
+            }
+
             LastStatus = InjectionStatus.NotWritable;
-            LastMessage = "index.html is not writable by the Jellyfin process, so the in-browser "
-                + "slider is unavailable. Server-side volume adjustment still works everywhere, "
-                + "including in the web client.";
-            _logger.LogWarning(ex, "JellyToneDown: {Message}", LastMessage);
-        }
-        catch (IOException ex)
-        {
-            LastStatus = InjectionStatus.NotWritable;
-            LastMessage = "Could not write to index.html: " + ex.Message;
+            LastMessage = "index.html is not writable by the Jellyfin process, so the on-disk "
+                + "patch cannot be applied. Switch the method back to rewriting the response, "
+                + "which needs no write access.";
             _logger.LogWarning(ex, "JellyToneDown: {Message}", LastMessage);
         }
         catch (Exception ex)
@@ -190,14 +230,31 @@ public sealed class ScriptInjectionService : IHostedService
 
     private static string RemoveExistingBlock(string html)
     {
-        // Remove any block this plugin previously wrote, including ones from older versions
-        // with a different script URL.
+        // Removes any block this plugin has previously written, including ones from older
+        // versions with a different script URL.
         return Regex.Replace(
             html,
-            Regex.Escape(MarkerStart) + ".*?" + Regex.Escape(MarkerEnd),
+            Regex.Escape(ClientScriptTag.StartMarker) + ".*?" + Regex.Escape(ClientScriptTag.EndMarker),
             string.Empty,
             RegexOptions.Singleline,
             TimeSpan.FromSeconds(5));
+    }
+
+    private static void SetIdleStatus(bool wantsDiskPatch, bool alreadyInPlace)
+    {
+        if (wantsDiskPatch)
+        {
+            LastStatus = InjectionStatus.Injected;
+            LastMessage = alreadyInPlace
+                ? "The script tag is already in index.html on disk."
+                : "Added the script tag to index.html. Reload the web client once to pick it up.";
+            return;
+        }
+
+        LastStatus = InjectionStatus.Disabled;
+        LastMessage = alreadyInPlace
+            ? "index.html on disk is unpatched, as intended."
+            : "Removed an old script tag from index.html.";
     }
 
     private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)

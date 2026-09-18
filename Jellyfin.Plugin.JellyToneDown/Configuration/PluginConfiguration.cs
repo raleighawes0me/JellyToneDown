@@ -42,6 +42,25 @@ public enum WebClientHandling
 }
 
 /// <summary>
+/// How the plugin's browser script gets into the Jellyfin web client.
+/// </summary>
+public enum ScriptInjectionMethod
+{
+    /// <summary>
+    /// Add the script tag to index.html as the server sends it, from middleware. Needs no
+    /// write access to the web client directory, and a jellyfin-web upgrade cannot undo it.
+    /// </summary>
+    Response = 0,
+
+    /// <summary>
+    /// Edit index.html on disk when the server starts. Only possible where the web client
+    /// directory is writable by the Jellyfin process, which on a package install it usually
+    /// is not, and has to be re-applied after every web client upgrade.
+    /// </summary>
+    Disk = 1
+}
+
+/// <summary>
 /// A single user's personal theme volume.
 /// </summary>
 public class UserVolumeOverride
@@ -99,6 +118,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// index.html to load its browser script. Needed for the in-app slider.
     /// </summary>
     public bool InjectClientScript { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets how that script gets in. Defaults to rewriting the response, which works
+    /// regardless of file permissions; the on-disk patch is kept only for installs that would
+    /// rather not have middleware touching index.html.
+    /// </summary>
+    public ScriptInjectionMethod ScriptInjectionMethod { get; set; } = ScriptInjectionMethod.Response;
 
     /// <summary>
     /// Gets or sets the per-user levels.

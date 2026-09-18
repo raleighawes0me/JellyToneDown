@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 namespace Jellyfin.Plugin.JellyToneDown.Middleware;
 
 /// <summary>
-/// Inserts <see cref="ThemeGainMiddleware"/> at the very front of Jellyfin's request pipeline.
+/// Inserts the plugin's middleware at the very front of Jellyfin's request pipeline.
 /// </summary>
 /// <remarks>
 /// Jellyfin registers plugin services into the same service collection the web host is
@@ -26,6 +26,11 @@ public sealed class ThemeGainStartupFilter : IStartupFilter
 
         return app =>
         {
+            // Both run outermost, which is what the index rewriter needs: stripping
+            // Accept-Encoding on the way in only yields an uncompressed response if nothing
+            // downstream has already committed to compressing it. The two match disjoint
+            // paths, so their order relative to each other does not matter.
+            app.UseMiddleware<IndexHtmlInjectionMiddleware>();
             app.UseMiddleware<ThemeGainMiddleware>();
             next(app);
         };
