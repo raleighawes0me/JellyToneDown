@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JellyToneDown</title>
+</head>
+<body>
+<div id="JellyToneDownConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-select,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <form id="JellyToneDownConfigForm">
+
+                <h2 style="margin-top:0">Theme volume</h2>
+                <p class="fieldDescription" style="margin-bottom:1.5em">
+                    Turns down theme music and theme videos only. Nothing else in your library is
+                    affected, and the files on disk are never modified.
+                </p>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="DefaultVolumePercent">
+                        Default theme volume: <span id="DefaultVolumeReadout">40%</span>
+                    </label>
+                    <input id="DefaultVolumePercent" name="DefaultVolumePercent" type="range"
+                           min="0" max="100" step="1" style="width:100%" />
+                    <div class="fieldDescription">
+                        Applies to everyone who has not set their own level below.
+                    </div>
+                </div>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="Curve">Volume curve</label>
+                    <select is="emby-select" id="Curve" name="Curve" class="emby-select-withcolor emby-select">
+                        <option value="Cubic">Cubic - matches Jellyfin's own volume slider</option>
+                        <option value="Linear">Linear - gentler, much louder at the same percentage</option>
+                    </select>
+                    <div class="fieldDescription">
+                        Cubic is what the Jellyfin player uses, so 40% here sounds about like 40% there.
+                        Linear maps the percentage straight onto amplitude; if the cubic curve feels
+                        too aggressive at the low end, switch to this.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="ApplyToThemeSongs" name="ApplyToThemeSongs" type="checkbox" is="emby-checkbox" />
+                        <span>Adjust theme songs</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        The theme.mp3 that plays when you open a series or movie.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="ApplyToThemeVideos" name="ApplyToThemeVideos" type="checkbox" is="emby-checkbox" />
+                        <span>Adjust theme videos</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Only the audio track is touched; the video is copied through untouched.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="AllowUserOverrides" name="AllowUserOverrides" type="checkbox" is="emby-checkbox" />
+                        <span>Let users set their own level</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Adds a slider in the web client that appears while a theme is playing.
+                        Turn this off to enforce the server default for everyone.
+                    </div>
+                </div>
+
+                <h3>Web client</h3>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="WebClientHandling">How the web client gets quieter themes</label>
+                    <select is="emby-select" id="WebClientHandling" name="WebClientHandling"
+                            class="emby-select-withcolor emby-select">
+                        <option value="ServerGain">Server-side, same as every other client (recommended)</option>
+                        <option value="ClientScript">In the browser, by the injected script</option>
+                    </select>
+                    <div class="fieldDescription">
+                        Server-side is the sturdier option and behaves identically to your phone and
+                        TV apps. The browser option avoids re-encoding and responds instantly, but it
+                        depends on the web client's internals and needs script injection to be working.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="InjectClientScript" name="InjectClientScript" type="checkbox" is="emby-checkbox" />
+                        <span>Add the plugin's script to the web client</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Edits the web client's index.html so the volume slider is available in the
+                        browser. This is undone cleanly when you untick it. If the file is not
+                        writable by the Jellyfin process, the rest of the plugin still works.
+                    </div>
+                </div>
+
+                <h3>Advanced</h3>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="ExcludedClients">Leave these clients alone</label>
+                    <input id="ExcludedClients" name="ExcludedClients" type="text" is="emby-input" />
+                    <div class="fieldDescription">
+                        Comma-separated, matched loosely against the client name, for example
+                        <code>Kodi, Infuse</code>. Useful if a particular app already has its own
+                        theme volume control.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="MaxCacheSizeMb">Cache size limit (MB)</label>
+                    <input id="MaxCacheSizeMb" name="MaxCacheSizeMb" type="number" is="emby-input" min="0" step="64" />
+                    <div class="fieldDescription">
+                        Adjusted copies are kept here so a theme is only ever encoded once per level.
+                        The least recently used entries are dropped past this size.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="VerboseLogging" name="VerboseLogging" type="checkbox" is="emby-checkbox" />
+                        <span>Log every theme request</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Turn this on temporarily to work out why a particular client is not being
+                        adjusted. It is noisy.
+                    </div>
+                </div>
+
+                <h3>Per-user levels</h3>
+                <div class="fieldDescription" style="margin-bottom:1em">
+                    Leave a user blank to have them follow the server default.
+                </div>
+                <div id="UserOverrides"></div>
+
+                <br />
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+
+            <h3>Status</h3>
+            <div id="StatusPanel" class="fieldDescription">Loading...</div>
+            <br />
+            <button is="emby-button" type="button" id="ClearCacheButton" class="raised block emby-button">
+                <span>Clear the adjusted-audio cache</span>
+            </button>
+            <div class="fieldDescription" style="margin-top:.5em">
+                Safe at any time. Only the plugin's own cached copies are deleted; your theme files
+                are never touched.
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '618453c4-1b13-4fe4-881d-19536be75add';
+            var page = document.querySelector('#JellyToneDownConfigPage');
+            var users = [];
+
+            function q(selector) {
+                return page.querySelector(selector);
+            }
+
+            function renderUsers(config) {
+                var container = q('#UserOverrides');
+                container.innerHTML = '';
+
+                if (!users.length) {
+                    container.textContent = 'No users found.';
+                    return;
+                }
+
+                var byId = {};
+                (config.UserOverrides || []).forEach(function (entry) {
+                    byId[String(entry.UserId).replace(/-/g, '').toLowerCase()] = entry.VolumePercent;
+                });
+
+                users.forEach(function (user) {
+                    var key = String(user.Id).replace(/-/g, '').toLowerCase();
+
+                    var row = document.createElement('div');
+                    row.className = 'inputContainer';
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'center';
+                    row.style.gap = '1em';
+
+                    var label = document.createElement('label');
+                    label.className = 'inputLabel';
+                    label.style.flex = '1';
+                    label.style.margin = '0';
+                    label.setAttribute('for', 'user-' + key);
+                    label.textContent = user.Name;
+
+                    var input = document.createElement('input');
+                    input.setAttribute('is', 'emby-input');
+                    input.type = 'number';
+                    input.min = '0';
+                    input.max = '100';
+                    input.step = '1';
+                    input.style.width = '7em';
+                    input.id = 'user-' + key;
+                    input.className = 'jtd-user-input';
+                    input.dataset.userId = user.Id;
+                    input.placeholder = 'default';
+                    if (Object.prototype.hasOwnProperty.call(byId, key)) {
+                        input.value = byId[key];
+                    }
+
+                    row.append(label, input);
+                    container.appendChild(row);
+                });
+            }
+
+            function refreshStatus() {
+                ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl('JellyToneDown/Status'),
+                    dataType: 'json'
+                }).then(function (status) {
+                    var injection = {
+                        Injected: 'Script is in place in the web client.',
+                        Disabled: 'Script injection is switched off.',
+                        WebClientNotFound: 'Could not find the web client on disk.',
+                        NotWritable: 'index.html is not writable by the Jellyfin process, so the '
+                            + 'in-browser slider is unavailable. Everything else still works.',
+                        Failed: 'Injection failed; see the server log.'
+                    }[status.InjectionStatus] || status.InjectionStatus;
+
+                    q('#StatusPanel').innerHTML =
+                        '<div>' + injection + '</div>'
+                        + '<div style="margin-top:.4em;opacity:.8">' + status.InjectionMessage + '</div>'
+                        + '<div style="margin-top:.8em">Cache: ' + status.CachedFiles + ' file(s), '
+                        + status.CacheSizeMb + ' MB</div>'
+                        + '<div style="opacity:.7">' + status.CachePath + '</div>';
+                }).catch(function () {
+                    q('#StatusPanel').textContent = 'Could not load status.';
+                });
+            }
+
+            function load() {
+                Dashboard.showLoadingMsg();
+
+                Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getUsers()
+                ]).then(function (results) {
+                    var config = results[0];
+                    users = results[1] || [];
+
+                    var slider = q('#DefaultVolumePercent');
+                    slider.value = config.DefaultVolumePercent;
+                    q('#DefaultVolumeReadout').textContent = config.DefaultVolumePercent + '%';
+
+                    q('#Curve').value = config.Curve;
+                    q('#WebClientHandling').value = config.WebClientHandling;
+                    q('#ApplyToThemeSongs').checked = config.ApplyToThemeSongs;
+                    q('#ApplyToThemeVideos').checked = config.ApplyToThemeVideos;
+                    q('#AllowUserOverrides').checked = config.AllowUserOverrides;
+                    q('#InjectClientScript').checked = config.InjectClientScript;
+                    q('#VerboseLogging').checked = config.VerboseLogging;
+                    q('#MaxCacheSizeMb').value = config.MaxCacheSizeMb;
+                    q('#ExcludedClients').value = (config.ExcludedClients || []).join(', ');
+
+                    renderUsers(config);
+                    Dashboard.hideLoadingMsg();
+                    refreshStatus();
+                }).catch(function () {
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            page.addEventListener('pageshow', load);
+
+            page.addEventListener('input', function (e) {
+                if (e.target && e.target.id === 'DefaultVolumePercent') {
+                    q('#DefaultVolumeReadout').textContent = e.target.value + '%';
+                }
+            });
+
+            q('#JellyToneDownConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.DefaultVolumePercent = parseInt(q('#DefaultVolumePercent').value, 10);
+                    config.Curve = q('#Curve').value;
+                    config.WebClientHandling = q('#WebClientHandling').value;
+                    config.ApplyToThemeSongs = q('#ApplyToThemeSongs').checked;
+                    config.ApplyToThemeVideos = q('#ApplyToThemeVideos').checked;
+                    config.AllowUserOverrides = q('#AllowUserOverrides').checked;
+                    config.InjectClientScript = q('#InjectClientScript').checked;
+                    config.VerboseLogging = q('#VerboseLogging').checked;
+                    config.MaxCacheSizeMb = parseInt(q('#MaxCacheSizeMb').value, 10) || 0;
+                    config.ExcludedClients = q('#ExcludedClients').value
+                        .split(',')
+                        .map(function (s) { return s.trim(); })
+                        .filter(function (s) { return s.length > 0; });
+
+                    var overrides = [];
+                    page.querySelectorAll('.jtd-user-input').forEach(function (input) {
+                        if (input.value === '') {
+                            return;
+                        }
+                        var percent = parseInt(input.value, 10);
+                        if (isNaN(percent)) {
+                            return;
+                        }
+                        overrides.push({
+                            UserId: input.dataset.userId,
+                            VolumePercent: Math.min(100, Math.max(0, percent))
+                        });
+                    });
+                    config.UserOverrides = overrides;
+
+                    return ApiClient.updatePluginConfiguration(pluginId, config);
+                }).then(function (result) {
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                    refreshStatus();
+                }).catch(function () {
+                    Dashboard.hideLoadingMsg();
+                });
+
+                return false;
+            });
+
+            q('#ClearCacheButton').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({
+                    type: 'POST',
+                    url: ApiClient.getUrl('JellyToneDown/ClearCache'),
+                    dataType: 'json'
+                }).then(function (removed) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Removed ' + removed + ' cached file(s).');
+                    refreshStatus();
+                }).catch(function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not clear the cache; see the server log.');
+                });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
