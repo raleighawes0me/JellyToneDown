@@ -59,6 +59,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      # The catalogue icon is drawn from tools/make_image.py rather than kept as a
+      # committed binary, so the picture can never drift from the code that makes it.
+      # This has to run before JPRM, which bundles image.png into the zip by name, and
+      # the regenerated file is committed back to main alongside the manifest below.
+      - name: Draw the plugin icon
+        run: |
+          pip install --disable-pip-version-check pillow
+          python tools/make_image.py
+
       - name: Stamp the version
         run: |
           python - <<'PY'
@@ -121,9 +130,10 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          # Only manifest.json is committed. The version stamping above, and JPRM's own
-          # edits to Directory.Build.props, are build-time only and deliberately discarded.
-          git add manifest.json
+          # Only the manifest and the icon are committed. The version stamping above, and
+          # JPRM's own edits to Directory.Build.props, are build-time only and deliberately
+          # discarded.
+          git add manifest.json image.png
           if git diff --cached --quiet; then
             echo "manifest.json unchanged"
           else

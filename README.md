@@ -174,15 +174,28 @@ the old volume until their cache turns over.
 
 ## Releasing
 
-Tag a commit and push:
+**Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first.** Those notes are
+what Jellyfin shows beside the version in its plugin catalogue, and the release fails if the
+section is missing — otherwise every version silently inherits the previous one's notes,
+which is exactly how 1.0.0 and 1.0.1 both ended up captioned "Initial release".
+
+Then tag and push:
 
 ```bash
-git tag v1.0.1 && git push origin v1.0.1
+git tag v1.0.2 && git push origin v1.0.2
 ```
 
 The release workflow stamps the version, builds with JPRM, attaches the zip to a GitHub
 release, and adds the version to `manifest.json` on `main` so servers pointed at this
 repository are offered the update.
+
+The catalogue icon is `image.png` at the repo root. JPRM picks it up by name and bundles it,
+and the workflow points the manifest's `imageUrl` at it. It is not hand-drawn or pasted in:
+[tools/make_image.py](tools/make_image.py) draws it, the release workflow runs that script
+before packaging, and the result is committed back to `main` with the manifest. So the icon
+in the catalogue always matches the script — change the script, cut a release, and the
+picture follows. To preview a change without releasing, `pip install pillow && python
+tools/make_image.py` and look at the file it writes.
 
 ## License
 
