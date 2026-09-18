@@ -1,0 +1,10 @@
+bin/
+obj/
+artifacts/
+out/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+*.nupkg
