@@ -23,6 +23,7 @@ namespace Jellyfin.Plugin.JellyToneDown.ScheduledTasks;
 public class PrerenderThemeAudioTask : IScheduledTask, IConfigurableScheduledTask
 {
     private readonly ILibraryManager _libraryManager;
+    private readonly IMediaSourceManager _mediaSourceManager;
     private readonly GainCacheService _cache;
     private readonly ILogger<PrerenderThemeAudioTask> _logger;
 
@@ -30,14 +31,17 @@ public class PrerenderThemeAudioTask : IScheduledTask, IConfigurableScheduledTas
     /// Initializes a new instance of the <see cref="PrerenderThemeAudioTask"/> class.
     /// </summary>
     /// <param name="libraryManager">The library manager.</param>
+    /// <param name="mediaSourceManager">Used to read the source bitrate.</param>
     /// <param name="cache">The gain cache.</param>
     /// <param name="logger">The logger.</param>
     public PrerenderThemeAudioTask(
         ILibraryManager libraryManager,
+        IMediaSourceManager mediaSourceManager,
         GainCacheService cache,
         ILogger<PrerenderThemeAudioTask> logger)
     {
         _libraryManager = libraryManager;
+        _mediaSourceManager = mediaSourceManager;
         _cache = cache;
         _logger = logger;
     }
@@ -133,6 +137,7 @@ public class PrerenderThemeAudioTask : IScheduledTask, IConfigurableScheduledTas
             }
 
             var profile = ContainerProfile.Find(sourceContainer, isVideo);
+            var bitrate = MediaBitrate.GetSourceAudioBitrate(_mediaSourceManager, item.Id);
 
             foreach (var percent in levels)
             {
@@ -144,7 +149,7 @@ public class PrerenderThemeAudioTask : IScheduledTask, IConfigurableScheduledTas
                     try
                     {
                         await _cache
-                            .GetOrCreateAsync(item, profile, amplitude, isVideo, cancellationToken)
+                            .GetOrCreateAsync(item, profile, amplitude, isVideo, bitrate, cancellationToken)
                             .ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)

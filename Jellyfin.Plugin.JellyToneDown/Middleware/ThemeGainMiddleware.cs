@@ -28,6 +28,7 @@ public sealed class ThemeGainMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILibraryManager _libraryManager;
+    private readonly IMediaSourceManager _mediaSourceManager;
     private readonly IAuthorizationContext _authorizationContext;
     private readonly GainCacheService _cache;
     private readonly ILogger<ThemeGainMiddleware> _logger;
@@ -39,18 +40,21 @@ public sealed class ThemeGainMiddleware
     /// </summary>
     /// <param name="next">The next middleware.</param>
     /// <param name="libraryManager">The library manager.</param>
+    /// <param name="mediaSourceManager">Used to read the source bitrate.</param>
     /// <param name="authorizationContext">The authorization context.</param>
     /// <param name="cache">The gain cache.</param>
     /// <param name="logger">The logger.</param>
     public ThemeGainMiddleware(
         RequestDelegate next,
         ILibraryManager libraryManager,
+        IMediaSourceManager mediaSourceManager,
         IAuthorizationContext authorizationContext,
         GainCacheService cache,
         ILogger<ThemeGainMiddleware> logger)
     {
         _next = next;
         _libraryManager = libraryManager;
+        _mediaSourceManager = mediaSourceManager;
         _authorizationContext = authorizationContext;
         _cache = cache;
         _logger = logger;
@@ -175,7 +179,13 @@ public sealed class ThemeGainMiddleware
         }
 
         var path = await _cache
-            .GetOrCreateAsync(item, profile, amplitude, parsed.IsVideo, context.RequestAborted)
+            .GetOrCreateAsync(
+                item,
+                profile,
+                amplitude,
+                parsed.IsVideo,
+                MediaBitrate.GetSourceAudioBitrate(_mediaSourceManager, item.Id),
+                context.RequestAborted)
             .ConfigureAwait(false);
 
         if (path is null)
