@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.JellyToneDown</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.JellyToneDown</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <!-- CA1848: LoggerMessage delegates. CA2254: template literals. Not worth it for a plugin this size. -->
+    <NoWarn>$(NoWarn);CA1848;CA2254;CA1031</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    Jellyfin 12.x ships packages as 12.0.x / 12.1.x. The floating version below resolves to the
+    newest 12.0.x at restore time. To build against a different line, pass it in explicitly:
+        dotnet build -p:JellyfinVersion=12.1.*
+  -->
+  <PropertyGroup>
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">12.0.*</JellyfinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Needed for HttpContext, IStartupFilter, IApplicationBuilder and the MVC controller. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\configPage.html" />
+    <None Remove="Web\jellytonedown.js" />
+    <EmbeddedResource Include="Web\jellytonedown.js" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+[
+    {
+        "guid": "618453c4-1b13-4fe4-881d-19536be75add",
+        "name": "JellyToneDown",
+        "description": "Jellyfin plays a theme song in the background when you open a series or a movie, and offers no way to turn it down. JellyToneDown adds one. A server-wide default plus optional per-user levels, applied to theme songs and the audio of theme videos and to nothing else. The adjustment is made on the server, so it reaches every client rather than only the ones that happen to expose a volume control. Files in your library are never modified.",
+        "overview": "Adjust the volume of theme music. Just that.",
+        "owner": "raleighawes0me",
+        "category": "General",
+        "versions": []
+    }
+]
