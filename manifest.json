@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "1.0.2.0",
+                "changelog": "- Fixed the per-user settings page always reporting an expired session. Jellyfin 12 ships a\n  migration that disables legacy authorization, which switches off the `X-Emby-Token` header\n  the page was authenticating with. It now uses the standard `Authorization: MediaBrowser`\n  scheme.\n- Added a plugin icon.\n- Per-version release notes: every version used to read \"Initial release\" in the catalogue.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/raleighawes0me/JellyToneDown/releases/download/v1.0.2/jellytonedown_1.0.2.0.zip",
+                "checksum": "9278082d9cd201f6e805576c2b48d180",
+                "timestamp": "2026-09-18T18:18:53Z"
+            },
+            {
                 "version": "1.0.1.0",
                 "changelog": "- Added a per-user settings page at `/JellyToneDown/MySettings`, so users can set their own\n  theme volume without dashboard access. (Shipped broken - fixed in 1.0.2.)\n- Adjusted copies are now encoded at the lower of the source bitrate and a per-codec ceiling\n  rather than always around 190 kbps, so a 128 kbps theme is no longer inflated.\n- The encoder settings are part of the cache key, so changing them invalidates the cache by\n  itself.\n- Fixed the config page status panel printing the same sentence twice.",
                 "targetAbi": "12.0.0.0",
