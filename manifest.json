@@ -9,7 +9,7 @@
         "versions": [
             {
                 "version": "1.0.1.0",
-                "changelog": "Initial release.",
+                "changelog": "- Added a per-user settings page at `/JellyToneDown/MySettings`, so users can set their own\n  theme volume without dashboard access. (Shipped broken - fixed in 1.0.2.)\n- Adjusted copies are now encoded at the lower of the source bitrate and a per-codec ceiling\n  rather than always around 190 kbps, so a 128 kbps theme is no longer inflated.\n- The encoder settings are part of the cache key, so changing them invalidates the cache by\n  itself.\n- Fixed the config page status panel printing the same sentence twice.",
                 "targetAbi": "12.0.0.0",
                 "sourceUrl": "https://github.com/raleighawes0me/JellyToneDown/releases/download/v1.0.1/jellytonedown_1.0.1.0.zip",
                 "checksum": "5890363723c4844c2a5dd9cb84be05fd",
@@ -17,12 +17,13 @@
             },
             {
                 "version": "1.0.0.0",
-                "changelog": "Initial release.",
+                "changelog": "- Initial release.",
                 "targetAbi": "12.0.0.0",
                 "sourceUrl": "https://github.com/raleighawes0me/JellyToneDown/releases/download/v1.0.0/jellytonedown_1.0.0.0.zip",
                 "checksum": "7175afaa99ef7243c97b9034e78157fa",
                 "timestamp": "2026-09-18T15:46:36Z"
             }
-        ]
+        ],
+        "imageUrl": "https://raw.githubusercontent.com/raleighawes0me/JellyToneDown/main/image.png"
     }
 ]
