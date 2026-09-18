@@ -256,14 +256,15 @@ public class JellyToneDownController : ControllerBase
     public ActionResult<ThemeVolumeStatusDto> GetStatus()
     {
         var (bytes, files) = _cache.GetCacheStats();
+        var (injectionStatus, injectionMessage) = ScriptInjectionService.Describe();
 
         return new ThemeVolumeStatusDto
         {
             CachedFiles = files,
             CacheSizeMb = Math.Round(bytes / 1024d / 1024d, 1),
             CachePath = _cache.CacheRoot,
-            InjectionStatus = ScriptInjectionService.LastStatus.ToString(),
-            InjectionMessage = ScriptInjectionService.LastMessage
+            InjectionStatus = injectionStatus.ToString(),
+            InjectionMessage = injectionMessage
         };
     }
 

@@ -96,9 +96,25 @@
                         <span>Add the plugin's script to the web client</span>
                     </label>
                     <div class="fieldDescription checkboxFieldDescription">
-                        Edits the web client's index.html so the volume slider is available in the
-                        browser. This is undone cleanly when you untick it. If the file is not
-                        writable by the Jellyfin process, the rest of the plugin still works.
+                        Puts a volume slider in the web client while a theme is playing. If this
+                        cannot be made to work, the rest of the plugin is unaffected.
+                    </div>
+                </div>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="ScriptInjectionMethod">How the script gets in</label>
+                    <select is="emby-select" id="ScriptInjectionMethod" name="ScriptInjectionMethod"
+                            class="emby-select-withcolor emby-select">
+                        <option value="Response">Added to the page as it is served (recommended)</option>
+                        <option value="Disk">Written into index.html on disk</option>
+                    </select>
+                    <div class="fieldDescription">
+                        The first needs no write access to the web client and cannot be undone by a
+                        Jellyfin upgrade, which is why it is the default. The second is the older
+                        approach: it edits index.html when the server starts, so it only works where
+                        that file is writable by the Jellyfin process, and it has to be re-applied
+                        after every web client upgrade. Switching back to the first removes anything
+                        the second wrote.
                     </div>
                 </div>
 
@@ -256,6 +272,8 @@
                     // Short headline only. The server already returns a full sentence in
                     // InjectionMessage, so anything longer here just says it twice.
                     var headline = {
+                        ServedInResponse: 'Browser slider: active',
+                        ResponseNotSeenYet: 'Browser slider: ready',
                         Injected: 'Browser slider: active',
                         Disabled: 'Browser slider: turned off',
                         WebClientNotFound: 'Browser slider: web client not found',
@@ -306,6 +324,7 @@
                     q('#ApplyToThemeVideos').checked = config.ApplyToThemeVideos;
                     q('#AllowUserOverrides').checked = config.AllowUserOverrides;
                     q('#InjectClientScript').checked = config.InjectClientScript;
+                    q('#ScriptInjectionMethod').value = config.ScriptInjectionMethod || 'Response';
                     q('#VerboseLogging').checked = config.VerboseLogging;
                     q('#MaxCacheSizeMb').value = config.MaxCacheSizeMb;
                     q('#ExcludedClients').value = (config.ExcludedClients || []).join(', ');
@@ -339,6 +358,7 @@
                     config.ApplyToThemeVideos = q('#ApplyToThemeVideos').checked;
                     config.AllowUserOverrides = q('#AllowUserOverrides').checked;
                     config.InjectClientScript = q('#InjectClientScript').checked;
+                    config.ScriptInjectionMethod = q('#ScriptInjectionMethod').value;
                     config.VerboseLogging = q('#VerboseLogging').checked;
                     config.MaxCacheSizeMb = parseInt(q('#MaxCacheSizeMb').value, 10) || 0;
                     config.ExcludedClients = q('#ExcludedClients').value
