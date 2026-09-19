@@ -9,3 +9,8 @@ out/
 .idea/
 *.nupkg
 node_modules/
+# The test harness pins jsdom to an exact version instead of committing a lockfile. One
+# dev-only dependency does not justify an 18 KB lockfile in a plugin repository, and a
+# breaking change in a transitive dependency would show up as a loud red test job rather
+# than as anything shipped to users.
+tests/package-lock.json
