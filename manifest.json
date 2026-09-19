@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "1.1.1.0",
+                "changelog": "- The in-browser slider is now labelled **All themes**, and carries a tooltip saying it applies\n  to every title and to your account only. It always worked that way; appearing over a\n  particular series just made it look like a per-series control.\n- The per-user settings page says the same thing in the same words.\n- The slider now stays up for as long as a theme is actually playing, instead of fading after a\n  few seconds. Previously, once it had gone there was no way to get it back for the theme\n  already playing short of opening a different title. It still fades a few seconds after the\n  theme stops, and hovering it keeps it up as before.\n- On narrow screens the panel now drops the percentage rather than the \"All themes\" label, so\n  the thing that says what the slider controls survives on a phone.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/raleighawes0me/JellyToneDown/releases/download/v1.1.1/jellytonedown_1.1.1.0.zip",
+                "checksum": "7b60b13ef2aa9d3355f4b9c9188db2ca",
+                "timestamp": "2026-09-19T14:45:19Z"
+            },
+            {
                 "version": "1.1.0.0",
                 "changelog": "- The in-browser volume slider no longer needs a writable web client. The script tag is now\n  added to `index.html` as the page is served, by middleware, instead of being written into\n  the file on disk. That was the one part of the plugin that did not work on a normal package\n  install, where the web client is owned by root and Jellyfin runs as its own user - and it\n  also means a Jellyfin upgrade can no longer undo it.\n- The old on-disk patch is still selectable under **Web client -> How the script gets in**, and\n  switching away from it removes anything it previously wrote.\n- The config page now reports how many page loads the script has actually been added to, rather\n  than only whether it is switched on.\n- The catalogue icon is no longer a square that Jellyfin blew up to fill the card.",
                 "targetAbi": "12.0.0.0",
