@@ -44,3 +44,20 @@ jobs:
           retention-days: 30
           if-no-files-found: error
           path: ${{ steps.jprm.outputs.artifact }}
+
+  web-tests:
+    name: Browser script tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # No setup-node step on purpose. The runner image already ships Node, and any version
+      # it ships runs this suite, so there is one fewer action major to keep current.
+      - name: Install test dependencies
+        working-directory: tests
+        run: npm install --no-audit --no-fund
+
+      - name: Run the browser script tests
+        working-directory: tests
+        run: npm test

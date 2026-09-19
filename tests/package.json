@@ -1,0 +1,12 @@
+{
+  "name": "jellytonedown-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Behavioural tests for the browser script. Not shipped in the plugin.",
+  "scripts": {
+    "test": "node panel.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

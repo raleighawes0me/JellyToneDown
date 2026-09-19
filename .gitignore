@@ -8,3 +8,4 @@ out/
 .vscode/
 .idea/
 *.nupkg
+node_modules/

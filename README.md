@@ -114,6 +114,10 @@ rather use.
 **Per-user levels** — set a number for a user, or leave it blank to have them follow the
 default.
 
+The in-browser slider is labelled **All themes** for a reason: there is one level per user,
+applied to every title. It is not a per-series control, even though it appears over whichever
+series you happen to be looking at.
+
 ## How it works
 
 Two mechanisms, and you can see both in the source:
@@ -182,6 +186,23 @@ and rewriting one from middleware is not safe, so those routes are left alone.
 
 **Native clients that cache aggressively** may keep playing a previously downloaded theme at
 the old volume until their cache turns over.
+
+## Tests
+
+```bash
+cd tests && npm install && npm test
+```
+
+There is one suite, and it covers the browser script. That is a deliberate choice rather than
+a gap waiting to be filled: the C# side needs Jellyfin's packages and a running server, so it
+is exercised by building in CI and by actually installing the plugin, whereas the browser
+script hangs off media events and timers and is the part where a subtle mistake is easy to
+make and hard to notice. [tests/panel.test.js](tests/panel.test.js) loads
+`jellytonedown.js` unmodified into jsdom, fires the events a browser would fire, fakes the
+clock so a four-second timeout costs no time, and asserts on what reaches the DOM.
+
+It runs in CI on every push, as its own job — it needs Node but not .NET, so it does not wait
+on the plugin build.
 
 ## Releasing
 
