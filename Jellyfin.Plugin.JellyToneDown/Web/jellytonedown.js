@@ -343,10 +343,20 @@
 
         ['ended', 'emptied', 'pause'].forEach(function (name) {
             element.addEventListener(name, function () {
-                if (activeElement === element && (name === 'ended' || name === 'emptied')) {
-                    activeElement = null;
-                    hideUi();
+                if (activeElement !== element) {
+                    return;
                 }
+
+                if (name === 'pause') {
+                    // Audible playback has stopped but the element is still here. Start the
+                    // countdown rather than snatching the panel away, in case this is a
+                    // momentary pause before it resumes - a play event will cancel it.
+                    scheduleHide();
+                    return;
+                }
+
+                activeElement = null;
+                hideUi();
             });
         });
 
@@ -388,7 +398,10 @@
         '.jtd-panel input[type=range]{width:7.5rem;accent-color:#00a4dc;cursor:pointer;}',
         '.jtd-value{min-width:2.5rem;text-align:right;font-variant-numeric:tabular-nums;opacity:.85;}',
         '.jtd-label{opacity:.7;white-space:nowrap;}',
-        '@media (max-width:600px){.jtd-panel input[type=range]{width:5rem;}.jtd-label{display:none;}}'
+        // Narrow screens drop the percentage rather than the label. The number is a nicety;
+        // the label is what stops the panel reading as a per-series control, and the slider
+        // position already says roughly how loud it is.
+        '@media (max-width:600px){.jtd-panel input[type=range]{width:5rem;}.jtd-value{display:none;}}'
     ].join('');
 
     var SPEAKER_ON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
@@ -497,8 +510,23 @@
         }
     }
 
+    // True while a theme is actually audible.
+    function themeIsPlaying() {
+        return !!activeElement && !activeElement.paused && !activeElement.ended;
+    }
+
+    // The panel is only relevant while a theme is playing, so it stays up for exactly that
+    // long. It used to fade on a timer regardless, which left no way to bring it back for the
+    // theme already playing - you had to navigate to another title. Any caller that wants it
+    // gone is overridden while something is still audible; the pause, ended and emptied
+    // handlers call this again once that stops being true.
     function scheduleHide() {
         keepVisible();
+
+        if (themeIsPlaying()) {
+            return;
+        }
+
         hideTimer = setTimeout(function () {
             hideUi();
         }, UI_HIDE_DELAY_MS);

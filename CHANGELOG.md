@@ -14,6 +14,12 @@ be found.
   to every title and to your account only. It always worked that way; appearing over a
   particular series just made it look like a per-series control.
 - The per-user settings page says the same thing in the same words.
+- The slider now stays up for as long as a theme is actually playing, instead of fading after a
+  few seconds. Previously, once it had gone there was no way to get it back for the theme
+  already playing short of opening a different title. It still fades a few seconds after the
+  theme stops, and hovering it keeps it up as before.
+- On narrow screens the panel now drops the percentage rather than the "All themes" label, so
+  the thing that says what the slider controls survives on a phone.
 
 ## 1.1.0
 
