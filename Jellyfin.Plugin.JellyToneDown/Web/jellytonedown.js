@@ -405,10 +405,18 @@
         style.textContent = STYLE;
         document.head.appendChild(style);
 
+        // The panel appears over whichever series is open, which invites the reading that it
+        // sets the level for that series. It does not - there is one level per user, applied
+        // to every theme - so the label says so, and the full sentence is on the panel for
+        // anyone who hovers. "Global" is deliberately avoided: on a multi-user server it
+        // reads as "for everyone", which is the opposite of true.
+        var SCOPE_NOTE = 'Theme music volume for every title - your account only.';
+
         var panel = document.createElement('div');
         panel.className = 'jtd-panel';
         panel.setAttribute('role', 'group');
-        panel.setAttribute('aria-label', 'Theme music volume');
+        panel.setAttribute('aria-label', SCOPE_NOTE);
+        panel.title = SCOPE_NOTE;
 
         var muteButton = document.createElement('button');
         muteButton.type = 'button';
@@ -418,14 +426,14 @@
 
         var label = document.createElement('span');
         label.className = 'jtd-label';
-        label.textContent = 'Theme';
+        label.textContent = 'All themes';
 
         var slider = document.createElement('input');
         slider.type = 'range';
         slider.min = '0';
         slider.max = '100';
         slider.step = '1';
-        slider.setAttribute('aria-label', 'Theme music volume');
+        slider.setAttribute('aria-label', SCOPE_NOTE);
 
         var value = document.createElement('span');
         value.className = 'jtd-value';

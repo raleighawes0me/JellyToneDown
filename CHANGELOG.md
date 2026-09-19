@@ -4,7 +4,16 @@ The release workflow reads the section matching the version being released and p
 `manifest.json`, which is what Jellyfin shows in its plugin catalogue. **A release fails if
 there is no section for its version**, so this file cannot silently fall out of date.
 
-Headings may be written as `## 1.2.3` or `## 1.2.3.0`; both match the same release.
+Headings may be written as `## 1.2.3` or `## 1.2.3.0`; both match the same release. Nothing
+else may follow the number on that line - no "(unreleased)", no date - or the section will not
+be found.
+
+## 1.1.1
+
+- The in-browser slider is now labelled **All themes**, and carries a tooltip saying it applies
+  to every title and to your account only. It always worked that way; appearing over a
+  particular series just made it look like a per-series control.
+- The per-user settings page says the same thing in the same words.
 
 ## 1.1.0
 

@@ -103,15 +103,17 @@
 <body>
 <main>
     <h1>Theme music volume</h1>
-    <p class="sub">How loud the theme plays when you open a show or a film. Only yours &mdash; it
-        does not affect anyone else, or any other audio.</p>
+    <p class="sub">How loud every theme plays when you open a show or a film &mdash; one level for
+        all of them, not per title. Only yours: it does not affect anyone else, or any other
+        audio.</p>
 
     <p id="notice" class="notice hidden"></p>
 
     <div id="controls" class="hidden">
         <div class="row">
             <button id="mute" class="icon-button" type="button" title="Mute" aria-label="Mute theme music"></button>
-            <input id="slider" type="range" min="0" max="100" step="1" aria-label="Theme music volume">
+            <input id="slider" type="range" min="0" max="100" step="1"
+                   aria-label="Theme music volume for every title - your account only">
             <span id="readout" class="readout">&mdash;</span>
         </div>
         <footer>
